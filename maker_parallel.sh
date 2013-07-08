@@ -3,7 +3,32 @@
 
 # This script will parallelize maker by splitting the given fasta into individual contigs 
 # This script will take advantage of SGE's task arrays
-# Usage: maker_parallel.sh <file input> <working directory> <ID field separator> [priority] 
+# Usage: maker_parallel.sh <file input> <working directory> '<ID field separator>' [priority] 
+# 
+# Parameters:
+# The <file input> is simply the genome/multi-fasta file you want to work with. This script will copy
+# The fasta file into the working directory, if it is not already there. This protects the source data
+# from any clobber. The path to the file can be relative. Just as long as the script can find the fasta file.
+#
+# The <working directory> is a folder where all the output will be found. In addition to the working directory,
+# there will be two additional folders inside. The script will make a data folder to hold the analysis of each
+# contig and a log folder to contain all of qsubs output. This leaves the working directory to contain the
+# source fasta file, the folders, Maker's configuration files, and a datastore index.
+#
+# The <ID field separator> is a single quoted string that separates information in the fasta file. Each sequence
+# in a fasta file has an indentification line that starts with a ">". This line contains the name and additional
+# information. The information is usually separated by some character. However, the delimiting character isn't
+# standard, so this needs to be given to the script. PLEASE note that this should be in single quotes. (e.g. ' ')
+#
+# Optional Arguments:
+#
+# Additional Information:
+# The ideology behind the script is to replace Maker's native MPI support. Rather than relying
+# on Maker (which simply creates multiple processes that reads and writes the same files), we organize
+# the folder so one process will work with on contig. This makes the log file clearer when we need to
+# review the output. To further replace the Maker's MPI setting, a "global" datastore index is created in
+# the working directory to allow users to use Maker's gff3_merge and fasta_merge.
+# 
 
 # This function is used for each individual task. Rather than screating a second script, we reuse the script
 qsub_maker () {
