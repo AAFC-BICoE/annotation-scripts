@@ -96,8 +96,8 @@ if [[ -z $1 || -z $2 ]]; then
 fi
 
 # Checks for valid file
-if [[ ! $1 == *.fa* ]]; then
-	echo "Unrecognized fasta file. File must have .fa* ending."
+if [[ ! ($1 == *.fa*) || ($1 == *.genome*) ]]; then
+	echo "Unrecognized fasta file. File must have .fa* or .genome ending."
 	exit 0;
 fi
 
