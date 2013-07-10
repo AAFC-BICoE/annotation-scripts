@@ -6,21 +6,31 @@
 # Usage: maker_parallel.sh <file input> <working directory> '<ID field separator>' [priority] 
 # 
 # Parameters:
-# The <file input> is simply the genome/multi-fasta file you want to work with. This script will copy
-# The fasta file into the working directory, if it is not already there. This protects the source data
-# from any clobber. The path to the file can be relative. Just as long as the script can find the fasta file.
+# <file input> 
+#	is simply the genome/multi-fasta file you want to work with. This script will copy
+# 	The fasta file into the working directory, if it is not already there. This protects
+# 	source data from any clobber. The path to the file can be relative.
 #
-# The <working directory> is a folder where all the output will be found. In addition to the working directory,
-# there will be two additional folders inside. The script will make a data folder to hold the analysis of each
-# contig and a log folder to contain all of qsubs output. This leaves the working directory to contain the
-# source fasta file, the folders, Maker's configuration files, and a datastore index.
+# <working directory> 
+#	The folder where all the output will be found. In addition to the working directory,
+# 	there will be two additional folders inside. The script will make a data folder to 
+#	hold the analysis of each contig and a log folder to contain all of qsubs output. 
+#	This leaves the working directory to contain the source fasta file, the folders,
+#	Maker's configuration files, and a datastore index.
 #
-# The <ID field separator> is a single quoted string that separates information in the fasta file. Each sequence
-# in a fasta file has an indentification line that starts with a ">". This line contains the name and additional
-# information. The information is usually separated by some character. However, the delimiting character isn't
-# standard, so this needs to be given to the script. PLEASE note that this should be in single quotes. (e.g. ' ')
+# <ID field separator> 
+#	A single quoted string that separates information in the fasta file. Each sequence
+#	in a fasta file has an indentification line that starts with a ">". This line contains 
+#	the name and additional information. The information is usually separated by some 
+#	character. However, the delimiting character isn't standard, so this needs to be given
+#	to the script. PLEASE note that this should be in single quotes. (e.g. ' ')
 #
 # Optional Arguments:
+# Priority
+#	An integer ranging from -1023 to 0. This is given to qsub to determine how urgent a task is.
+# 
+# CPU
+#	An integer indicating how many cpus to allocate to each task.
 #
 # Additional Information:
 # The ideology behind the script is to replace Maker's native MPI support. Rather than relying
@@ -58,6 +68,9 @@ qsub_maker () {
 
 	# Adjusts the genome to point to the new file.
 	sed -i s%^genome=.*%genome=$new_dir/data/${file_array[$num]}/${file_array[$num]}.fasta% maker_opts.ctl
+	# Adjusts cpu usage as requested by user
+	sed -i s%^cpus=.*%cpus=$cpu% maker_opts.ctl
+
 	/isilon/biodiversity/pipelines/maker-2.10/maker-2.10/bin/maker
 
 	# Edits and copy datastore file to the global datastore file.
@@ -89,7 +102,7 @@ set -e
 
 # Outputs the standard help/usage info
 if [[ -z $1 || -z $2 ]]; then
-        echo "Usage: $0 <fasta_file> <working_directory> '<identifier line delimiter>' [priority]"
+        echo "Usage: $0 <fasta_file> <working_directory> '<identifier line delimiter>' [priority] [cpus]"
         echo "This script will split a given fasta file into n parts. Each file will be in their own folder. The maker configuration files must be in the working directory."
 	echo "Note the single quotes around the delimiter!"
         exit 0;
@@ -111,7 +124,14 @@ fi
 if [[ -z $4 ]]; then
 	priority=0
 else
-	priority=$3
+	priority=$4
+fi
+
+# Assigns a default priority value
+if [[ -z $5 ]]; then
+        cpu=1
+else
+        cpu=$5
 fi
 
 printf "Creating initial variables... "
@@ -162,6 +182,5 @@ do
 	echo $i >> index
 done
 
-qsub -N "Maker_Parallel" -cwd -p $priority -j y -r y -v new_dir=$new_dir,filename=$filename -V -t 1-$num_contig:1 $script_path/$(basename $0)
+qsub -N "Maker_Parallel" -cwd -p $priority -j y -r y -v new_dir=$new_dir,filename=$filename,cpu=$cpu -V -pe orte $cpu -t 1-$num_contig:1 $script_path/$(basename $0)
 
-echo ""
