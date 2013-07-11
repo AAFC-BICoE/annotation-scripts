@@ -173,7 +173,11 @@ cd logs
 # As of this moment, there is no safe way to export arrays to a child process.
 # As a workaround, we will dump this array to a file and read it again to rebuild.
 IFS=$'\n'
-export file_array=( $(grep "^>" ../subset.fasta | cut -d"$3" -f 1 | cut -d'>' -f 2) )
+if [[ ! (-z $3 || $3 == '') ]]; then
+	export file_array=( $(grep "^>" ../$(basename $1) | cut -d"$3" -f 1 | cut -d'>' -f 2) )
+else
+	export file_array=( $(grep "^>" ../$(basename $1) | cut -f 1 | cut -d'>' -f 2) )
+fi
 
 touch index
 
