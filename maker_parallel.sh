@@ -186,5 +186,5 @@ do
 	echo $i >> index
 done
 
-qsub -N "Maker_Parallel" -cwd -p $priority -j y -r y -v new_dir=$new_dir,filename=$filename,cpu=$cpu -V -pe orte $cpu -t 1-$num_contig:1 $script_path/$(basename $0)
+qsub -N "Maker_Parallel" -cwd -q all.q -p $priority -j y -r y -v new_dir=$new_dir,filename=$filename,cpu=$cpu -V -pe orte $cpu -t 1-$num_contig:1 $script_path/$(basename $0)
 
