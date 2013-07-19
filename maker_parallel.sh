@@ -70,6 +70,9 @@ qsub_maker () {
 	sed -i s%^genome=.*%genome=$new_dir/data/${file_array[$num]}/${file_array[$num]}.fasta% maker_opts.ctl
 	# Adjusts cpu usage as requested by user
 	sed -i s%^cpus=.*%cpus=$cpu% maker_opts.ctl
+	
+	# Changes temp directory to avoid NFS errors. (Bug 2183 Comment 19)
+	sed -i s%^TMP=.*%TMP=/state/partition1/% maker_opts.ctl
 
 	/isilon/biodiversity/pipelines/maker-2.10/maker-2.10/bin/maker
 
