@@ -120,23 +120,19 @@ set -e
 usage="Usage: $0 -f <fasta_file> -w <working_directory> -d <identifier line delimiter> -p [priority] -c [cpus] \n
 This script will split a given fasta file into n parts. Each file will be in their own folder. The maker configuration files must be in the working directory."
 
+
 while getopts :f:w:dpc: optname
 do
 	case "$optname"	in
 		f) file=${OPTARG};;
 		w) new_dir=${OPTARG};;
 		d) delimiter="-d \"${OPTARG}\"";;
-		p) priority=${OPTARG};;
+		p) priority=${@:$OPTIND}; shift $((OPTIND-1));;
 		c) cpu=${OPTARG};;
-		*) echo -e $usage; exit 0;;
+		*) echo $optname ; echo -e $usage; exit 0;;
 		?) echo -e $usage; exit 0;;
 	esac
 done
-
-if [ $(( $# % 2)) -ne 0 ]; then
-	echo -e $usage
-	exit 0;
-fi
 
 # Checks for valid file
 if [[ ! ($file == *.fa*) || ($file == *.genome*) ]]; then
@@ -191,8 +187,6 @@ echo There are $num_contig contigs in this file.
 
 mkdir -p logs # Create a folder to store all the logs
 cd logs
-
-#qsub -N "Maker_Parallel" -cwd -q all.q -p $priority -b y -v new_dir=$new_dir,filename=$filename,cpu=$cpu,from=$file,delimiter=$delimiter -V -pe smp $cpu -t 1-$num_contig:1 $script_path/$(basename $0)
 
 qsub -N "Maker_Parallel" -cwd -q all.q -p $priority -b y -v new_dir=$new_dir,filename=$filename,cpu=$cpu,from=$file,delimiter=$delimiter -V -pe smp $cpu -t 1-$num_contig:1 $script_path/$(basename $0)
 
