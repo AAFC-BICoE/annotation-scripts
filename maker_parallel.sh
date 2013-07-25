@@ -42,8 +42,6 @@
 
 # This function is used for each individual task. Rather than screating a second script, we reuse the script
 qsub_maker () {
-	num=$(( $SGE_TASK_ID - 1 )) # Arrays begin their index at 0, so we must shift the numbers accordingly
-
 	cd $new_dir #Just makes sure we're in the correct directory
 	
 	# Pulls the nth sequence from the fasta file.
@@ -100,9 +98,9 @@ qsub_maker () {
 		loca="$new_dir/data/$folder_struct/$contig_name.maker.output/$(echo $line | cut -d ' ' -f 2)"
 		stat="$(echo $line | cut -d ' ' -f 3)"
 		printf "$name\t$loca\t$stat\n" >> index.tmp
-	done < $contig_name.maker.output/$contig_name_master_datastore_index.log
+	done < "$contig_name.maker.output/$contig_name""_master_datastore_index.log"
 
-	cat index.tmp >> $new_dir/$filename\_master_datastore_index.log
+	cat index.tmp >> "$new_dir/$filename""_master_datastore_index.log"
 	rm index.tmp
 }
 
