@@ -49,6 +49,7 @@ qsub_maker () {
 
 	# Pulls the name from the fasta file
 	contig_name=`head -n 1 contig_$SGE_TASK_ID.fasta | grep "^>"| cut $delimiter -f 1 | cut -d'>' -f 2`
+
 	# This decides which folder structure to use. If there's less than 300 contigs, it should be fine
 	# to leave it all in one folder. Otherwise, we'll group into 50 folders.
 	# We will use folder_struct to hold the folder names after data.
@@ -71,25 +72,31 @@ qsub_maker () {
 		folder_struct=$contig_name
 	fi
 	
-	# Creates the folders, if not already there.
-	mkdir -p data/$folder_struct
-	# Get the fasta file to the new folder
-	mv contig_$SGE_TASK_ID.fasta data/$folder_struct/$contig_name.fasta
-	
-	cd data
-	# Gathers Maker config files
-	cp ../maker_{opts,bopts,exe}.ctl $folder_struct/
-	
-	cd $folder_struct
-	# Adjusts the genome to point to the new file.
-	sed -i s%^genome=.*%genome=$new_dir/data/$folder_struct/$contig_name.fasta% maker_opts.ctl
-	# Adjusts cpu usage as requested by user
-	sed -i s%^cpus=.*%cpus=$cpu% maker_opts.ctl
-	
-	# Changes temp directory to avoid NFS errors. (Bug 2183 Comment 19)
-	sed -i s%^TMP=.*%TMP=/state/partition1/% maker_opts.ctl
+	if [ ! -d data/$folder_struct]; then
+		# Creates the folders, if not already there.
+		mkdir -p data/$folder_struct
+		# Get the fasta file to the new folder
+		mv contig_$SGE_TASK_ID.fasta data/$folder_struct/$contig_name.fasta
+	fi	
 
-	/isilon/biodiversity/pipelines/maker-2.10/maker-2.10/bin/maker
+	cd data
+	
+	if [ ! ( -e $folder_struct/maker_opts.ctl && -e $folder_struct/maker_bopts.ctl && -e $folder_struct/maker_exe.ctl ) ]
+	then
+		# Gathers Maker config files
+		cp ../maker_{opts,bopts,exe}.ctl $folder_struct/
+	
+		cd $folder_struct
+		# Adjusts the genome to point to the new file.
+		sed -i s%^genome=.*%genome=$new_dir/data/$folder_struct/$contig_name.fasta% maker_opts.ctl
+		# Adjusts cpu usage as requested by user
+		sed -i s%^cpus=.*%cpus=$cpu% maker_opts.ctl
+	
+		# Changes temp directory to avoid NFS errors. (Bug 2183 Comment 19)
+		sed -i s%^TMP=.*%TMP=/state/partition1/% maker_opts.ctl
+	fi
+
+	maker # Run Maker. It should have been installed so that it gets added to the PATH.
 
 	# Edits and copy datastore file to the global datastore file.
 	while read line
@@ -102,6 +109,13 @@ qsub_maker () {
 
 	cat index.tmp >> "$new_dir/$filename""_master_datastore_index.log"
 	rm index.tmp
+	
+	# Optionally Run InterProScan
+	if [[ $stat = "FINISHED" && ! -z $interpro ]]; then
+		cd $loca
+		$interpro -b $name -f TSV,XML,GFF3,HTML -goterms -iprlookup -pa -i $name.maker.proteins.fasta #run interpro
+		ipr_update_gff $name.gff $name.tsv #Merge results back to gff file
+	fi
 }
 
 # MAIN FUNCTION BEGIN
@@ -115,22 +129,32 @@ fi
 #A safe way to catch errors early. Ends the script if a command fails.
 set -e
 
-usage="Usage: $0 -f <fasta_file> -w <working_directory> -d <identifier line delimiter> -p [priority] -c [cpus] \n
-This script will split a given fasta file into n parts. Each file will be in their own folder. The maker configuration files must be in the working directory."
+usage="Usage: $0 -f <fasta_file> -w <working_directory> [-i <interpro location>-d <identifier line delimiter> -p [priority] -c [cpus]] \nThis script will split a given fasta file so each sequence is in their own fasta file. Each file will be in their own folder. The maker configuration files must be in the working directory. You may specify to run a interproscan by using -i <location>."
 
 
-while getopts :f:w:dpc: optname
+while getopts :f:w:idpc: optname
 do
 	case "$optname"	in
 		f) file=${OPTARG};;
 		w) new_dir=${OPTARG};;
+		i) interpro=${OPTARG};;
 		d) delimiter="-d \"${OPTARG}\"";;
 		p) priority=${@:$OPTIND}; shift $((OPTIND-1));;
 		c) cpu=${OPTARG};;
-		*) echo $optname ; echo -e $usage; exit 0;;
+		*) echo -e $usage; exit 0;;
 		?) echo -e $usage; exit 0;;
 	esac
 done
+
+if [-d logs ]; then
+	mkdir old_logs
+	mv logs/* old_logs/
+fi
+
+if [ $# -eq 0 ]; then
+	echo -e $usage
+	exit 0;
+fi
 
 # Checks for valid file
 if [[ ! ($file == *.fa*) || ($file == *.genome*) ]]; then
@@ -186,5 +210,5 @@ echo There are $num_contig contigs in this file.
 mkdir -p logs # Create a folder to store all the logs
 cd logs
 
-qsub -N "Maker_Parallel" -cwd -q all.q -p $priority -b y -v new_dir=$new_dir,filename=$filename,cpu=$cpu,from=$file,delimiter=$delimiter -V -pe smp $cpu -t 1-$num_contig:1 $script_path/$(basename $0)
+qsub -N "Maker_Parallel" -cwd -q all.q -p $priority -b y -v new_dir=$new_dir,filename=$filename,cpu=$cpu,from=$file,delimiter=$delimiter,interpro=$interpro -V -pe smp $cpu -t 1-$num_contig:1 $script_path/$(basename $0)
 
