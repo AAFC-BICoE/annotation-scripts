@@ -72,16 +72,18 @@ qsub_maker () {
 		folder_struct=$contig_name
 	fi
 	
-	if [ ! -d data/$folder_struct]; then
+	if [ ! -d data/$folder_struct ]; then
 		# Creates the folders, if not already there.
 		mkdir -p data/$folder_struct
 		# Get the fasta file to the new folder
 		mv contig_$SGE_TASK_ID.fasta data/$folder_struct/$contig_name.fasta
+	else
+		rm contig_$SGE_TASK_ID.fasta
 	fi	
 
 	cd data
 	
-	if [ ! ( -e $folder_struct/maker_opts.ctl && -e $folder_struct/maker_bopts.ctl && -e $folder_struct/maker_exe.ctl ) ]
+	if [[ ! ( -e $folder_struct/maker_opts.ctl && -e $folder_struct/maker_bopts.ctl && -e $folder_struct/maker_exe.ctl ) ]]
 	then
 		# Gathers Maker config files
 		cp ../maker_{opts,bopts,exe}.ctl $folder_struct/
@@ -94,6 +96,8 @@ qsub_maker () {
 	
 		# Changes temp directory to avoid NFS errors. (Bug 2183 Comment 19)
 		sed -i s%^TMP=.*%TMP=/state/partition1/% maker_opts.ctl
+	else
+		cd $folder_struct
 	fi
 
 	maker # Run Maker. It should have been installed so that it gets added to the PATH.
@@ -105,13 +109,13 @@ qsub_maker () {
 		loca="$new_dir/data/$folder_struct/$contig_name.maker.output/$(echo $line | cut -d ' ' -f 2)"
 		stat="$(echo $line | cut -d ' ' -f 3)"
 		printf "$name\t$loca\t$stat\n" >> index.tmp
-	done < "$contig_name.maker.output/$contig_name""_master_datastore_index.log"
+	done < "$new_dir/data/$folder_struct/$contig_name.maker.output/$contig_name""_master_datastore_index.log"
 
 	cat index.tmp >> "$new_dir/$filename""_master_datastore_index.log"
 	rm index.tmp
 	
 	# Optionally Run InterProScan
-	if [[ $stat = "FINISHED" && ! -z $interpro ]]; then
+	if [[ $stat = "FINISHED" && ! -z $interpro && ! -e $loca/$name.tsv ]]; then
 		cd $loca
 		$interpro -b $name -f TSV,XML,GFF3,HTML -goterms -iprlookup -pa -i $name.maker.proteins.fasta #run interpro
 		ipr_update_gff $name.gff $name.tsv #Merge results back to gff file
@@ -132,29 +136,18 @@ set -e
 usage="Usage: $0 -f <fasta_file> -w <working_directory> [-i <interpro location>-d <identifier line delimiter> -p [priority] -c [cpus]] \nThis script will split a given fasta file so each sequence is in their own fasta file. Each file will be in their own folder. The maker configuration files must be in the working directory. You may specify to run a interproscan by using -i <location>."
 
 
-while getopts :f:w:idpc: optname
+while [ ! -z $1 ];
 do
-	case "$optname"	in
-		f) file=${OPTARG};;
-		w) new_dir=${OPTARG};;
-		i) interpro=${OPTARG};;
-		d) delimiter="-d \"${OPTARG}\"";;
-		p) priority=${@:$OPTIND}; shift $((OPTIND-1));;
-		c) cpu=${OPTARG};;
+	case $1 in
+		-f) shift; file=$1; shift;;
+		-w) shift; new_dir=$1; shift;;
+		-i) shift; interpro=$1; shift;;
+		-d) shift; delimiter="-d \"$1\""; shift;;
+		-p) shift; priority=$1; shift;;
+		-c) shift; cpu=$1; shift;;
 		*) echo -e $usage; exit 0;;
-		?) echo -e $usage; exit 0;;
 	esac
 done
-
-if [-d logs ]; then
-	mkdir old_logs
-	mv logs/* old_logs/
-fi
-
-if [ $# -eq 0 ]; then
-	echo -e $usage
-	exit 0;
-fi
 
 # Checks for valid file
 if [[ ! ($file == *.fa*) || ($file == *.genome*) ]]; then
@@ -207,7 +200,14 @@ printf "done!\n"
 
 echo There are $num_contig contigs in this file.
 
-mkdir -p logs # Create a folder to store all the logs
+if [ -d logs ]; then
+        mkdir -p old_logs
+        mv logs/* old_logs/
+	mv $filename"_master_datastore_index.log" old_logs/
+else
+	mkdir -p logs # Create a folder to store all the logs
+fi
+
 cd logs
 
 qsub -N "Maker_Parallel" -cwd -q all.q -p $priority -b y -v new_dir=$new_dir,filename=$filename,cpu=$cpu,from=$file,delimiter=$delimiter,interpro=$interpro -V -pe smp $cpu -t 1-$num_contig:1 $script_path/$(basename $0)
