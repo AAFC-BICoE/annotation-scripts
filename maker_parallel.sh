@@ -40,16 +40,22 @@
 # the working directory to allow users to use Maker's gff3_merge and fasta_merge.
 # 
 
-# This function is used for each individual task. Rather than screating a second script, we reuse the script
+# This function is used for each individual task. Rather than screating a second script, 
+# we reuse the script. This function should not be invoked directly.
+# Pre: SGE variables and SGE_TASK_ID must be initialized. Runs only when the script is is called by qsub
+# In addition, the current working directory should be in logs/.
+# Post: Creates a folder holding all of maker's output and a fasta file of a contig from the input genome
+# file. In addition, creates a master_datastore log in the working directory.
 qsub_maker () {
-	cd $new_dir #Just makes sure we're in the correct directory
+	# Moves the current working directory up one level.
+	# This is a work around to allow all of SGE's logs to remain in logs/
+	cd $new_dir
 	
 	# Pulls the nth sequence from the fasta file.
 	awk -v RS='>' -v seq=$SGE_TASK_ID 'NR>=(seq+1)&&NR<=(seq+1){print ">"$0}'  $new_dir/$(basename $from) > contig_$SGE_TASK_ID.fasta
 
 	# Pulls the name from the fasta file
 	contig_name=`head -n 1 contig_$SGE_TASK_ID.fasta | grep "^>"| cut $delimiter -f 1 | cut -d'>' -f 2`
-
 	# This decides which folder structure to use. If there's less than 300 contigs, it should be fine
 	# to leave it all in one folder. Otherwise, we'll group into 50 folders.
 	# We will use folder_struct to hold the folder names after data.
@@ -149,6 +155,11 @@ do
 	esac
 done
 
+if [ $# -eq 0 ]; then
+	echo -e $usage
+	exit 0;
+fi
+
 # Checks for valid file
 if [[ ! ($file == *.fa*) || ($file == *.genome*) ]]; then
 	echo "Unrecognized fasta file. File must have .fa* or .genome ending."
@@ -210,5 +221,5 @@ fi
 
 cd logs
 
-qsub -N "Maker_Parallel" -cwd -q all.q -p $priority -b y -v new_dir=$new_dir,filename=$filename,cpu=$cpu,from=$file,delimiter=$delimiter,interpro=$interpro -V -pe smp $cpu -t 1-$num_contig:1 $script_path/$(basename $0)
+qsub -N "Maker_Parallel" -cwd -q all.q -p $priority -b y -v new_dir=$new_dir,filename=$filename,cpu=$cpu,from=$file,delimiter=$delimiter,interpro=$interpro -V -pe smp $cpu -t 1-$num_contig:1 -tc 10 $script_path/$(basename $0)
 
