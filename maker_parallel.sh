@@ -78,7 +78,7 @@ qsub_maker () {
 		folder_struct=$contig_name
 	fi
 	
-	if [ ! -d data/$folder_struct ]; then
+	if [[ ! -d data/$folder_struct ]]; then
 		# Creates the folders, if not already there.
 		mkdir -p data/$folder_struct
 		# Get the fasta file to the new folder
@@ -126,6 +126,10 @@ qsub_maker () {
 		$interpro -b $name -f TSV,XML,GFF3,HTML -goterms -iprlookup -pa -i $name.maker.proteins.fasta #run interpro
 		ipr_update_gff $name.gff $name.tsv #Merge results back to gff file
 	fi
+
+	# Explicitly define UTR regions and start and stop codons
+	add_utr_start_stop_gff $name.gff tmp-$name.gff
+	mv tmp-$name.gff $name.gff
 }
 
 # MAIN FUNCTION BEGIN
@@ -155,6 +159,7 @@ do
 		-d) shift; delimiter="-d \"$1\""; shift;;
 		-p) shift; priority=$1; shift;;
 		-c) shift; cpu=$1; shift;;
+		*) echo -e $usage; exit 0;;
 	esac
 done
 
@@ -209,7 +214,7 @@ printf "done!\n"
 
 echo There are $num_contig contigs in this file.
 
-if [ -d logs ]; then
+if [[ ( -d logs ) && -n "`ls logs`" ]]; then
         mkdir -p old_logs
         mv logs/* old_logs/
 	mv $filename"_master_datastore_index.log" old_logs/
@@ -219,5 +224,5 @@ fi
 
 cd logs
 
-qsub -N "Maker_Parallel" -cwd -q all.q -p $priority -b y -v new_dir=$new_dir,filename=$filename,cpu=$cpu,from=$file,delimiter=$delimiter,interpro=$interpro -V -pe smp $cpu -t 1-$num_contig:1 -tc 10 $script_path/$(basename $0)
+qsub -N "Maker_Parallel" -V -pe smp $cpu -t 1-$num_contig:1 -tc 10 -cwd -q all.q -p $priority -b y -v new_dir=$new_dir,filename=$filename,cpu=$cpu,from=$file,delimiter=$delimiter,interpro=$interpro $script_path/$(basename $0)
 
