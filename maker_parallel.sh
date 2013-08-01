@@ -141,6 +141,10 @@ set -e
 
 usage="Usage: $0 -f <fasta_file> -w <working_directory> [-i <interpro location>-d <identifier line delimiter> -p [priority] -c [cpus]] \nThis script will split a given fasta file so each sequence is in their own fasta file. Each file will be in their own folder. The maker configuration files must be in the working directory. You may specify to run a interproscan by using -i <location>."
 
+if [ $# -eq 0 ]; then
+        echo -e $usage
+        exit 0;
+fi
 
 while [ ! -z $1 ];
 do
@@ -151,14 +155,8 @@ do
 		-d) shift; delimiter="-d \"$1\""; shift;;
 		-p) shift; priority=$1; shift;;
 		-c) shift; cpu=$1; shift;;
-		*) echo -e $usage; exit 0;;
 	esac
 done
-
-if [ $# -eq 0 ]; then
-	echo -e $usage
-	exit 0;
-fi
 
 # Checks for valid file
 if [[ ! ($file == *.fa*) || ($file == *.genome*) ]]; then
