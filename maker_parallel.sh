@@ -55,7 +55,14 @@ qsub_maker () {
 	awk -v RS='>' -v seq=$SGE_TASK_ID 'NR>=(seq+1)&&NR<=(seq+1){print ">"$0}'  $new_dir/$(basename $from) > contig_$SGE_TASK_ID.fasta
 
 	# Pulls the name from the fasta file
-	contig_name=`head -n 1 contig_$SGE_TASK_ID.fasta | grep "^>"| cut $delimiter -f 1 | cut -d'>' -f 2`
+	contig_name="`head -n 1 contig_$SGE_TASK_ID.fasta`"
+
+	if [[ -n "$delimiter" ]]; then
+		contig_name=`echo ${contig_name%%$delimiter*} |  cut -d'>' -f 2`
+	else
+		contig_name=`echo $contig_name | cut -d'>' -f 2`
+	fi
+
 	# This decides which folder structure to use. If there's less than 300 contigs, it should be fine
 	# to leave it all in one folder. Otherwise, we'll group into 50 folders.
 	# We will use folder_struct to hold the folder names after data.
@@ -78,6 +85,8 @@ qsub_maker () {
 		folder_struct=$contig_name
 	fi
 	
+	echo $folder_struct
+
 	if [[ ! -d data/$folder_struct ]]; then
 		# Creates the folders, if not already there.
 		mkdir -p data/$folder_struct
@@ -143,7 +152,7 @@ fi
 #A safe way to catch errors early. Ends the script if a command fails.
 set -e
 
-usage="Usage: $0 -f <fasta_file> -w <working_directory> [-i <interpro location>-d <identifier line delimiter> -p [priority] -c [cpus]] \nThis script will split a given fasta file so each sequence is in their own fasta file. Each file will be in their own folder. The maker configuration files must be in the working directory. You may specify to run a interproscan by using -i <location>."
+usage="\nUsage: $0 -f <fasta_file> -w <working_directory> [-i <interpro location>-d <identifier line delimiter> -p [priority] -c [cpus]] \n\nThis script will split a given fasta file so each sequence is in their own fasta file. Each file will be in their own folder. \nThe maker configuration files must be in the working directory. \nYou may specify to run a interproscan by using -i <location>. \n\nFor more information, read the documentation at the top of this script."
 
 if [ $# -eq 0 ]; then
         echo -e $usage
@@ -156,7 +165,7 @@ do
 		-f) shift; file=$1; shift;;
 		-w) shift; new_dir=$1; shift;;
 		-i) shift; interpro=$1; shift;;
-		-d) shift; delimiter="-d \"$1\""; shift;;
+		-d) shift; delimiter="$1"; shift;;
 		-p) shift; priority=$1; shift;;
 		-c) shift; cpu=$1; shift;;
 		*) echo -e $usage; exit 0;;
@@ -166,13 +175,18 @@ done
 # Checks for valid file
 if [[ ! ($file == *.fa*) || ($file == *.genome*) ]]; then
 	echo "Unrecognized fasta file. File must have .fa* or .genome ending."
-	exit 0;
+	exit 1;
 fi
 
 # Checks if you provided maker's configuration file.
 if [[ -z $new_dir || ! (-e $new_dir/maker_bopts.ctl && -e $new_dir/maker_exe.ctl && -e $new_dir/maker_opts.ctl) ]]; then
 	echo "Cannot find maker configuration files. You can generate blank configuration files by using maker's -CTL flag."
-	exit 0;
+	exit 1;
+fi
+
+if [[ -n $interpro && ! -f $interpro ]]; then
+	echo "Cannot find $interpro. Please ensure that the path is valid."
+	exit 1;
 fi
 
 # Assigns a default priority value
@@ -215,14 +229,16 @@ printf "done!\n"
 echo There are $num_contig contigs in this file.
 
 if [[ ( -d logs ) && -n "`ls logs`" ]]; then
+	set +e
         mkdir -p old_logs
         mv logs/* old_logs/
 	mv $filename"_master_datastore_index.log" old_logs/
+	set -e
 else
 	mkdir -p logs # Create a folder to store all the logs
 fi
 
 cd logs
 
-qsub -N "Maker_Parallel" -V -pe smp $cpu -t 1-$num_contig:1 -tc 10 -cwd -q all.q -p $priority -b y -v new_dir=$new_dir,filename=$filename,cpu=$cpu,from=$file,delimiter=$delimiter,interpro=$interpro $script_path/$(basename $0)
+qsub -N "Maker_Parallel" -V -pe smp $cpu -t 1-$num_contig:1 -tc 10 -cwd -q all.q -p $priority -b y -v new_dir=$new_dir,filename=$filename,cpu=$cpu,from=$file,delimiter="$delimiter",interpro=$interpro $script_path/$(basename $0)
 
