@@ -139,6 +139,13 @@ qsub_maker () {
 	# Explicitly define UTR regions and start and stop codons
 	add_utr_start_stop_gff $name.gff tmp-$name.gff
 	mv tmp-$name.gff $name.gff
+
+	cd $new_dir
+
+	# Collates all the results into a genome level file.
+	gff3_merge -d "$filename""_master_datastore_index.log" -g -o $filename.genes_only.gff3
+	gff3_merge -d "$filename""_master_datastore_index.log" -o $filename.maker.all.gff3
+	fasta_merge -d "$filename""_master_datastore_index.log"
 }
 
 # MAIN FUNCTION BEGIN
