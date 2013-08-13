@@ -74,7 +74,7 @@ qsub_maker () {
 		folder=$(( $SGE_TASK_ID / $per_folders ))
 
 		# This is just to have the last folder matching the number of the last contig.
-		if [[ ( $(( $SGE_TASK_ID % 50 )) -ne 0 ) && ( $folder -eq 50 ) ]]; then
+		if [[  $folder -eq 50  ]]; then
 			folder_struct="$((per_folders * 50))-$SGE_TASK_LAST/$contig_name"
 		else
 			min_num=$(($folder * $per_folders))
@@ -130,7 +130,7 @@ qsub_maker () {
 	rm index.tmp
 	
 	# Optionally Run InterProScan
-	if [[ $stat = "FINISHED" && ! -z $interpro && ! -e $loca/$name.tsv ]]; then
+	if [[ -e "$loca/$name.maker.proteins.fasta" && $stat = "FINISHED" && ! -z $interpro && ! -e $loca/$name.tsv ]]; then
 		cd $loca
 		$interpro -b $name -f TSV,XML,GFF3,HTML -goterms -iprlookup -pa -i $name.maker.proteins.fasta #run interpro
 		ipr_update_gff $name.gff $name.tsv #Merge results back to gff file
@@ -139,13 +139,6 @@ qsub_maker () {
 	# Explicitly define UTR regions and start and stop codons
 	add_utr_start_stop_gff $name.gff tmp-$name.gff
 	mv tmp-$name.gff $name.gff
-
-	cd $new_dir
-
-	# Collates all the results into a genome level file.
-	gff3_merge -d "$filename""_master_datastore_index.log" -g -o $filename.genes_only.gff3
-	gff3_merge -d "$filename""_master_datastore_index.log" -o $filename.maker.all.gff3
-	fasta_merge -d "$filename""_master_datastore_index.log"
 }
 
 # MAIN FUNCTION BEGIN
