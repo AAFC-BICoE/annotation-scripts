@@ -137,7 +137,7 @@ qsub_maker () {
 	fi
 
 	# Explicitly define UTR regions and start and stop codons
-	add_utr_start_stop_gff $name.gff tmp-$name.gff
+	add_utr_start_stop_gff $name.gff > tmp-$name.gff
 	mv tmp-$name.gff $name.gff
 }
 
