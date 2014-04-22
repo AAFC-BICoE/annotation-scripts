@@ -1,8 +1,6 @@
-
 use strict;
 use warnings;
-use File::Which;
-use Data::Dumper;
+
 my $usage = "
 add_blast_to_maker.pl maker.gff ncbi-blast.outfmt6.txt blastdb {nucl,prot} threshold_value new_file.gff
 
@@ -10,13 +8,11 @@ This script will take a blast report and attempt to create new GFF3 features fro
 matches of at least the given value. Prints to STDOUT. Choose nucl or prot to specify the
 database type!
 
-The threshold value should be an integer (like 70) 
-to represent 70%. We will query the blastdb using blastdbcmd for the description and list any 
-additional names. The blast results must be in the following format:
+The threshold value should be an integer (like 70) to represent 70%. We will query the 
+blastdb using blastdbcmd for the description and list any additional names. The blast 
+results must be in the following format:
 
 qseqid sseqid pident evalue bitscore qstart qend
-
-Note that all columns except for btop are part of the standard -outfmt 6 output.
 
 You can create a blast report with more than these columns for your own use. You can then generate 
 your blast output and use the following awk one-liner to generate the output for this script.
@@ -33,17 +29,23 @@ my ( $gff_file, $blast_file, $blastdb, $dbtype, $threshold, $output ) = @ARGV;
 die $usage unless $blastdb && (-e $blast_file ) && (-e $gff_file ) && $threshold && $dbtype && $output;
 
 if ( -e $output ) {
-	die "$output already exists. Will no clobber.\n";
+	die "$output already exists. Will not clobber.\n";
 }
 
 #----------------------------------------
 #Parse blast_file
 
-my $exe = which('blastdbcmd') or die "Can't find blastdbcmd\n";
+#my $exe = which('blastdbcmd') or die "Can't find blastdbcmd\n";
+my $exe = `which blastdbcmd` or die "Can't find blastdbcmd\n";
+chomp $exe;
 
 open(my $IN, '<', $blast_file) or die "Can't open $blast_file for reading\n";
 
-print "Now parsing the blast report...";
+print "Now parsing the blast report...\r";
+
+#Calculate line numer for progress tracking
+my $num = (split(" ", `wc -l $blast_file`))[0];
+my $count = 0;
 
 # %rna is a hash of arrays that maps
 # $qseqid => [ \@hits ]
@@ -58,6 +60,14 @@ print "Now parsing the blast report...";
 my (%rna, @hits, @entry);
 
 while (<$IN>) {
+	$count = $count + 1;
+	#Print progress every so often
+	if ( $count % 500 == 0 ) {
+		no integer;
+		my $progress = sprintf("%.0f", ($count/$num *100));
+		print "Now parsing the blast report...$progress%\r";
+	}
+
 	chomp;	
 	my ($qseqid, $sseqid, $pident, $evalue, $bitscore, $qstart, $qend) = split(/\t/);
 	
@@ -78,7 +88,7 @@ while (<$IN>) {
 	my $id = (split(/\|/, $sseqid))[1];
 	#Get fasta identifiers (This is probably the slowest part)
 	#Should look like this: ref|WP_003131952.1|#!#30S ribosomal protein S18 [Lactococcus lactis]
-	my @fasta_identifiers = split("\n", `$exe -db $blastdb -entry $id -outfmt \"%i\#\!\#%t\"`);
+	my @fasta_identifiers = split("\n", `$exe -db $blastdb -dbtype $dbtype -entry $id -outfmt \"%i\#\!\#%t\"`);
 	
 	#Clear the arrays for new entries
 	my @database_ref = ();
@@ -95,9 +105,9 @@ while (<$IN>) {
 	@entry = ([ @database_ref ], [ @description_list ], $pident, $evalue, $bitscore, $qstart, $qend);
 	push (@hits,  [@entry]);
 	$rna{$qseqid} = [@hits];
-
 }
-print "Done!\n";
+
+print "Now parsing the blast report...Done!\n";
 close $IN;
 
 #---------------------------------------------------------------
@@ -107,12 +117,29 @@ close $IN;
 open( $IN, "<", $gff_file) or die "Can't open $gff_file.\n";
 open( my $OUT, ">", $output ) or die "Can't write to $output.\n";
 
-print "Now writing new GFF file...";
+print "Now writing new GFF file...\r";
+
+#Variables for progress tracking
+$num = (split(" ", `wc -l $gff_file`))[0];
+$count = 0;
+
 while(<$IN>) {
+        $count = $count + 1;
+	#print progress every so often
+	if ( $count % 500 == 0 ) {
+	        no integer;
+        	$count = $count + 1;
+	        my $progress = sprintf("%.0f", ($count/$num *100));
+	        print "Now writing new GFF file...$progress%\r";
+	}
+
+	#Get variables
 	my ($seq, $source, $type, $start, $end, $score, $strand, $phase, $attribute) = split(/\t/);
 
+	#print line first
+	print $OUT "$_";
+
 	if ($_ =~ /^\s*\#/ || ! $attribute || ! ( $type =~ /mrna/i || $type =~ /transcript/i) ) {
-		print $OUT "$_";
 		next;
 	}
 
@@ -121,7 +148,6 @@ while(<$IN>) {
 	if ( $rna{$id} ) {
 		@hits = @{ $rna{$id} };
 	} else {
-		print $OUT "$_";
 		next;
 	}
 
@@ -129,36 +155,32 @@ while(<$IN>) {
 	for my $entry ( 0 .. $#hits ) {
 		#Assume that the size of @database_ref and @description_list is the same
 		for my $i ( 0 .. $#{ $hits[$entry][0] } ) {
-			my ($feature_start, $feature_end);
+
+			#Determine which strand is the match on
 			if ( $hits[$entry][5] < $hits[$entry][6] ) {
-				$feature_start = $start + $hits[$entry][5] - 1;
-				$feature_end = $start + $hits[$entry][6] - 1;
 				$strand = '+';
-				$phase = ($hits[$entry][5] - 1) % 3;
 			} else {
-				$feature_start =$start + $hits[$entry][6] - 1;
-				$feature_end = $start + $hits[$entry][5] - 1;
 				$strand = '-';
-				$phase = ($end - $feature_end - 1) % 3;
 			}
 
-			#Parse description
+			#Parse description and ID information
 			my ($name, @db_id);
 			my $dbref = "";
+
 			#UniProt: S-adenosylmethionine synthase OS=Ascobolus immersus PE=3 SV=1
 			if ( $hits[$entry][1][$i] =~ /(.*?)\s+OS=(.*?)\s+(GN=(.*?)\s+)?PE=/ ) {
 				$name = "$4 " if $4;
 				$name .= "$1 " if $1;
 				$name .= "($2) " if $2;
-				$name .= "$hits[$entry][2]% identity, bitscore $hits[$entry][4]";
+				$name .= "$hits[$entry][2]% identity, bitscore$hits[$entry][4]";
 			#Genbank uniprot: RecName: Full=30S ribosomal protein S18
 			} elsif ( $hits[$entry][1][$i] =~ /RecName: [A-Za-z]+=(.+?);*.*/) {
 				$name = $1;
-				$name .= " $hits[$entry][2]% identity, bitscore $hits[$entry][4]";
+				$name .= " $hits[$entry][2]% identity, bitscore$hits[$entry][4]";
 			#Genbank  normal: 30S ribosomal protein S18 [Lactococcus lactis subsp. cremoris UC509.9]
 			} else {
 				$name = $hits[$entry][1][$i];
-				$name .= " $hits[$entry][2]% identity, bitscore $hits[$entry][4]";
+				$name .= " $hits[$entry][2]% identity, bitscore$hits[$entry][4]";
 			}
 
 			#Parse the id's 
@@ -185,18 +207,17 @@ while(<$IN>) {
 
 			#Attribute example:
                         #ID=69326-augustus-gene-0.103-mRNA-1;Parent=69326-augustus-gene-0.103;Name=69326-augustus-gene-0.103-mRNA-1;Dbxref=Gene3D:G3DSA:1.10.20.10,InterPro:IPR003958,InterPro:IPR00907;
-			my $attrib = join(";", ("ID=$id\_blast_match_$entry\_id_$i", "Name=$name", "Dbxref=$dbref;"));
+			my $attrib = join(";", ("ID=$id\_blast_match_$entry\_redundant-entry_$i", "Name=$name", "Dbxref=$dbref;"));
 			
 			my $feature;
 			if ( $dbtype eq "prot" ) {
-				$feature = join("\t", ($seq, "blast", "protein_match", $feature_start, $feature_end, $hits[$entry][3], $strand, $phase, $attrib));
+				$feature = join("\t", ($seq, "blast", "protein_match", $start, $end, $hits[$entry][3], $strand, ".", $attrib));
 			} else {
-				$feature = join("\t", ($seq, "blast", "nucleotide_match", $feature_start, $feature_end, $hits[$entry][3], $strand, $phase, $attrib));
+				$feature = join("\t", ($seq, "blast", "nucleotide_match", $start, $end, $hits[$entry][3], $strand, ".", $attrib));
 			}
 
 			print $OUT "$feature\n";
 		}
 	}
-	print $OUT "$_";
 }
-print "Done!\n";
+print "Now writing new GFF file...Done!\n";
