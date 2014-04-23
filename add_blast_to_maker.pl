@@ -1,3 +1,4 @@
+#!/opt/perl/bin/perl
 use strict;
 use warnings;
 
@@ -62,7 +63,7 @@ my (%rna, @hits, @entry);
 while (<$IN>) {
 	$count = $count + 1;
 	#Print progress every so often
-	if ( $count % 500 == 0 ) {
+	if ( $count % 1000 == 0 ) {
 		no integer;
 		my $progress = sprintf("%.0f", ($count/$num *100));
 		print "Now parsing the blast report...$progress%\r";
@@ -126,7 +127,7 @@ $count = 0;
 while(<$IN>) {
         $count = $count + 1;
 	#print progress every so often
-	if ( $count % 500 == 0 ) {
+	if ( $count % 1000 == 0 ) {
 	        no integer;
         	$count = $count + 1;
 	        my $progress = sprintf("%.0f", ($count/$num *100));
