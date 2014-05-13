@@ -1,15 +1,42 @@
 #!/bin/bash
 
-usage() { echo "Usage: $0 [-w -f <function> | -s <start contig size> -e <end contig size> -f <function>" 1>&2; exit 1; }
+# Modifying just the top stanza below in a separate config file should be enough.
+genome_in=/isilon/biodiversity/projects/PRI_Se/assembly/clc-sendo.fasta
+RNA_in=/isilon/biodiversity/users/cullisj/bug3124/CFIA_contigs.fa
+proteins_in=/isilon/biodiversity/users/cullisj/bug3132/B_dendrobatidis/Batde5_best_proteins.fasta
+augustus_species=synchytrium_endobioticum
+cell_type=eukaryote # Bug: no difference if changed. Should change e.g. genemark binary used, among other things.
 
+alt_gm_hmm="../es.mod" # gm model to be used when genemark fails (gm seems to work only with full genome, not subsets).
+
+maker1_dir=maker1
+maker_bopts=maker_bopts.ctl
+maker_exe=maker_exe.ctl
+maker_opts=maker_opts.ctl
+
+augustus1_dir=augustus1
+snap_dir=snap
+genemark_es_dir=genemark_es
+genemark_sn_dir=genemark_sn
+
+maker2_dir=maker2
+gm_hmm=
+snap_hmm=$snap_dir/$genome.hmm
+
+genome="${genome_raw%.*}"
+genome_fa=$genome_raw
+
+usage() { echo "Usage: $0 [-w -f <function> | -s <start contig size> -e <end contig size> -f <function>]" 1>&2; exit 1; }
 cstart=
 cend=
 func=
-
-while getopts "ws:e:f:" opt; do
+while getopts "wc:s:e:f:" opt; do
     case "${opt}" in
         w)
             contig_range="whole_genome"
+            ;;
+        c)
+            config_file=${OPTARG}
             ;;
         s)
             cstart=${OPTARG}
@@ -23,45 +50,28 @@ while getopts "ws:e:f:" opt; do
     esac
 done
 
-if [[ $cstart && $cend && $func ]]; then
+# Source config file if it exists.
+[ -e $config_file ] && source $config_file
+
+# [[ $genome_in && $RNA_in && $proteins_in && $augustus_species ]] || die error
+
+genome_raw=`[ $genome_raw ] || basename $genome_in`
+RNA=`[ $RNA ] || basename $RNA_in`
+proteins=`[ $proteins ] || basename $proteins_in`
+
+# Variables above this line can be redefined in the config.
+# Variables below cannot.
+
+if [[ $cstart && $cend ]]; then
     contig_range="$cstart-$cend"
-elif [[ $contig_range && $func ]]; then
-    x=
-else
-    usage
 fi
 
-# export contig_range="x-y"
-genome_in=/isilon/biodiversity/projects/PRI_Se/assembly/clc-sendo.fasta
-genome_raw=Se_PRI2_assembly.fa
-RNA_in=/isilon/biodiversity/users/cullisj/bug3124/CFIA_contigs.fa
-RNA=CFIA_RNA_contigs.fa
-proteins_in=/isilon/biodiversity/users/cullisj/bug3132/B_dendrobatidis/Batde5_best_proteins.fasta
-proteins=B_dendro_JGI_proteins.fa
-echo "Using contig range $contig_range"
-
-maker1_dir=maker1
-augustus1_dir=augustus1
-snap_dir=snap
-genemark_es_dir=genemark_es
-genemark_sn_dir=genemark_sn
-gm_hmm=
-
-genome="${genome_raw%.*}"
-genome_fa=$genome_raw
 if [[ $contig_range != "whole_genome" ]]; then
-    genome=Se_PRI2_assembly_${contig_range}
+    echo "Using contig range $contig_range"
+    genome=${genome}_${contig_range}
     genome_fa=$genome.fa
-    gensub=$genome
-    gensub_fa=$genome_fa
+    augustus_species=${augustus_species}_${contig_range} # Used by Maker2
 fi
-#maker_out=$maker1_dir/$genome.maker.output
-#species=synchytrium_endobioticum
-augustus_species=synchytrium_endobioticum_${contig_range}
-
-maker_bopts=maker_bopts.ctl
-maker_exe=maker_exe.ctl
-maker_opts=maker_opts.ctl
 
 dir_setup()
 {
@@ -74,7 +84,7 @@ sample_fasta()
 {
     if [[ $contig_range != "whole_genome" ]]; then
         [ -e ./fastaSizes.pl ] || svn export http://biodiversity/svn/source/misc_scripts/fastaSizes.pl
-        perl ./fastaSizes.pl -f $genome_raw -r $contig_range -o $gensub_fa
+        perl ./fastaSizes.pl -f $genome_raw -r $contig_range -o $genome_fa
     fi
 }
 
@@ -118,7 +128,7 @@ run_maker1()
     
     # Line below creates genome.ann, genome.dna files, required by augustus, snap, ..
     /isilon/biodiversity/pipelines/maker-2.10/maker-2.10/bin/maker2zff -d $maker_out/*_master_datastore_index.log
-    # mv $gensub.all* genome.ann genome.dna $maker_out/
+    # mv $genome.all* genome.ann genome.dna $maker_out/
     cd ..
 }
 
@@ -190,7 +200,12 @@ train_genemark_es()
 	# If your contigs are short, try adding --min_contig 10,000 and --max_nnn 5000
     # When completed, the training file is ./mod/es.mod. Note that this is a symlink
     # to another file. If you want to move it, you should just copy the actual file.
-    gm_hmm=`readlink $genemark_es_dir/mod/es.mod`
+    es_mod=$genemark_es_dir/mod/es.mod
+    if [ -e $es_mod ]; then
+        gm_hmm=`readlink $es_mod`
+    elif [ -e $alt_gm_hmm ]
+        gm_hmm=$alt_gm_hmm
+    fi
 }
 
 # Train genemark for prokaryotes
@@ -210,10 +225,10 @@ run_maker2()
     cp $genome_fa $RNA $proteins $maker2_dir
     # cp $snap_dir/path/to/snaphmm snap.hmm
     # if [ type=eukaryote ]; then ...
-    cp $gm_hmm $maker2_dir/gm_es.mod $maker2_dir/ # ln -s to be able to see target here?
+    cp $gm_hmm $maker2_dir/gm_es.mod # ln -s to be able to see target here?
+    cp $snap_hmm $maker2_dir/snap.hmm
     
     cp $maker1_dir/$genome.all.gff $maker2_dir
-    
     cp $maker1_dir/*ctl $maker2_dir/
     cd $maker2_dir
     #maker -CTL
@@ -231,9 +246,19 @@ run_maker2()
     replace_vars $maker_opts est2genome 0
     replace_vars $maker_opts protein2genome 0
     
-    replace_vars $maker_exe snap \\
-    replace_vars $maker_exe augustus \\
-    replace_vars 
+    replace_vars $maker_exe snap \\/isilon\\/biodiversity\\/pipelines\\/maker-2.10\\/snap-2013-16\\/snap
+    replace_vars $maker_exe augustus \\/isilon\\/biodiversity\\/pipelines\\/maker-2.10\\/augustus.2.7\\/bin\\/augustus
+    # replace_vars 
+    maker_out=$genome.maker.output
+    /isilon/biodiversity/pipelines/maker-2.10/maker-2.10/bin/maker
+    /isilon/biodiversity/pipelines/maker-2.10/maker-2.10/bin/gff3_merge -d $maker_out/*_master_datastore_index.log
+    /isilon/biodiversity/pipelines/maker-2.10/maker-2.10/bin/fasta_merge -d $maker_out/*_master_datastore_index.log
+    sed '/FASTA/q' $genome.all.gff | sed '$d' >$genome.all.nofa.gff
+    
+    # Line below creates genome.ann, genome.dna files, required by augustus, snap, ..
+    #/isilon/biodiversity/pipelines/maker-2.10/maker-2.10/bin/maker2zff -d $maker_out/*_master_datastore_index.log
+    # mv $genome.all* genome.ann genome.dna $maker_out/
+    cd ..
 }
 
 # dummy job to create a file when all previous qsub jobs complete
@@ -242,20 +267,7 @@ finish() {
     touch finished
 }
 
-#1. You may wish to copy the evidence files and control files from the last run
-
-#2. Ensure that est2genome and protein2genome is set to 0.
-
-#3. Under the gene predictions section, set augustus_species, snaphmm, gmhmm as needed.
-
-#4. Run MAKER again.
-
-#5. Collect your results as before.
-
-
-#dir_setup
-#sample_fasta
-#run_maker1
-
-eval $func
+if [[ $contig_range && $func ]]; then
+    eval $func
+fi
 
