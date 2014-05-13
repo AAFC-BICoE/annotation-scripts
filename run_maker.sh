@@ -49,7 +49,7 @@ gm_hmm=
 
 genome="${genome_raw%.*}"
 genome_fa=$genome_raw
-if [[ contig_range != "whole_genome" ]]; then
+if [[ $contig_range != "whole_genome" ]]; then
     genome=Se_PRI2_assembly_${contig_range}
     genome_fa=$genome.fa
     gensub=$genome
