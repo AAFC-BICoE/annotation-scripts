@@ -72,8 +72,10 @@ dir_setup()
 
 sample_fasta()
 {
-    [ -e ./fastaSizes.pl ] || svn export http://biodiversity/svn/source/misc_scripts/fastaSizes.pl
-    perl ./fastaSizes.pl -f $genome_raw -r $contig_range -o $gensub_fa
+    if [[ $contig_range != "whole_genome" ]]; then
+        [ -e ./fastaSizes.pl ] || svn export http://biodiversity/svn/source/misc_scripts/fastaSizes.pl
+        perl ./fastaSizes.pl -f $genome_raw -r $contig_range -o $gensub_fa
+    fi
 }
 
 check_organism()
