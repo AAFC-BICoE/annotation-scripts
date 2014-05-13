@@ -1,11 +1,14 @@
-usage() { echo "Usage: $0 [-s <start contig size> -e <end contig size> -f <function>" 1>&2; exit 1; }
+usage() { echo "Usage: $0 [-w -f <function> | -s <start contig size> -e <end contig size> -f <function>" 1>&2; exit 1; }
 
 cstart=
 cend=
 func=
 
-while getopts "s:e:f:" opt; do
+while getopts "ws:e:f:" opt; do
     case "${opt}" in
+        w)
+            contig_range="whole_genome"
+            ;;        
         s)
             cstart=${OPTARG}
             ;;
@@ -20,6 +23,9 @@ done
 
 if [[ $cstart && $cend && $func ]]; then
     contig_range="$cstart-$cend"
+    contig_args=" -s $cstart -e $cend "
+elif [[ $contig_range && $func ]]; then
+    contig_args=" -w "
 else
     usage
 fi
@@ -36,7 +42,7 @@ submit_job() {
         ((count++))
     done
     # [ $hold_str ] || $hold_str=" -hold_jid 1 "
-    qout=`qsub -N "${fn}_${cstart}_${cend}" $hold_jid_str ../qsub_script.sh "../run_maker.sh -s $cstart -e $cend -f $fn"`
+    qout=`qsub -N "${fn}_${contig_range}" $hold_jid_str ../qsub_script.sh "../run_maker.sh $contig_args -f $fn"`
     echo $qout 1>&2
     rjid=`echo $qout | awk '{print $3}'`
     echo $rjid
@@ -57,7 +63,7 @@ submit_all() {
 if [[ "$func" = "all" ]]; then
     submit_all
 else
-    qsub -N "${func}_${cstart}_${cend}" ../qsub_script.sh "../run_maker.sh -s $cstart -e $cend -f $func"
+    qsub -N "${func}_${contig_range}" ../qsub_script.sh "../run_maker.sh $contig_args -f $func"
 fi
 
 

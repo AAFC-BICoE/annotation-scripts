@@ -1,6 +1,6 @@
 #!/bin/bash
 
-usage() { echo "Usage: $0 [-w | -s <start contig size> -e <end contig size> -f <function>" 1>&2; exit 1; }
+usage() { echo "Usage: $0 [-w -f <function> | -s <start contig size> -e <end contig size> -f <function>" 1>&2; exit 1; }
 
 cstart=
 cend=
@@ -10,6 +10,7 @@ while getopts "ws:e:f:" opt; do
     case "${opt}" in
         w)
             contig_range="whole_genome"
+            ;;
         s)
             cstart=${OPTARG}
             ;;
