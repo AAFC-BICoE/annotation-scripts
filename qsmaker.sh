@@ -4,7 +4,7 @@ cstart=
 cend=
 func=
 config_args=
-while getopts "ws:e:f:" opt; do
+while getopts "wc:s:e:f:" opt; do
     case "${opt}" in
         w)
             contig_range="whole_genome"
