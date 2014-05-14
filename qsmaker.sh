@@ -60,7 +60,7 @@ submit_all() {
     maker1_jid=`submit_job run_maker1 ${sample_fasta_jid}`
     augustus1_jid=`submit_job train_augustus1 ${maker1_jid}`
     snap_jid=`submit_job train_snap ${maker1_jid}`
-    maker2_jid=`submit_jon run_maker2 ${augustus1_jid} ${snap_jid} ${genemark_es_jid}`
+    maker2_jid=`submit_job run_maker2 ${augustus1_jid} ${snap_jid} ${genemark_es_jid}`
     finished_jid=`submit_job finish ${maker2_jid}`
 }
 
