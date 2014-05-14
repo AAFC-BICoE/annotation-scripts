@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # Modifying just the top stanza below in a separate config file should be enough.
-genome_in=/isilon/biodiversity/projects/PRI_Se/assembly/clc-sendo.fasta
-RNA_in=/isilon/biodiversity/users/cullisj/bug3124/CFIA_contigs.fa
-proteins_in=/isilon/biodiversity/users/cullisj/bug3132/B_dendrobatidis/Batde5_best_proteins.fasta
-augustus_species=synchytrium_endobioticum
-cell_type=eukaryote # Bug: no difference if changed. Should change e.g. genemark binary used, among other things.
+#genome_in=/isilon/biodiversity/projects/PRI_Se/assembly/clc-sendo.fasta
+#RNA_in=/isilon/biodiversity/users/cullisj/bug3124/CFIA_contigs.fa
+#proteins_in=/isilon/biodiversity/users/cullisj/bug3132/B_dendrobatidis/Batde5_best_proteins.fasta
+#augustus_species=synchytrium_endobioticum
+#cell_type=eukaryote # Bug: no difference if changed. Should change e.g. genemark binary used, among other things.
 
 alt_gm_hmm="../es.mod" # gm model to be used when genemark fails (gm seems to work only with full genome, not subsets).
 
@@ -30,6 +30,7 @@ usage() { echo "Usage: $0 [-w -f <function> | -s <start contig size> -e <end con
 cstart=
 cend=
 func=
+config_file=
 while getopts "wc:s:e:f:" opt; do
     case "${opt}" in
         w)
@@ -203,7 +204,7 @@ train_genemark_es()
     es_mod=$genemark_es_dir/mod/es.mod
     if [ -e $es_mod ]; then
         gm_hmm=`readlink $es_mod`
-    elif [ -e $alt_gm_hmm ]
+    elif [ -e $alt_gm_hmm ]; then
         gm_hmm=$alt_gm_hmm
     fi
 }
