@@ -3,12 +3,15 @@ usage() { echo "Usage: $0 [-w -f <function> | -s <start contig size> -e <end con
 cstart=
 cend=
 func=
-
+config_args=
 while getopts "ws:e:f:" opt; do
     case "${opt}" in
         w)
             contig_range="whole_genome"
-            ;;        
+            ;;
+        c)
+            config_args=" -c ${OPTARG} "
+            ;;
         s)
             cstart=${OPTARG}
             ;;
@@ -42,7 +45,7 @@ submit_job() {
         ((count++))
     done
     # [ $hold_str ] || $hold_str=" -hold_jid 1 "
-    qout=`qsub -N "${fn}_${contig_range}" $hold_jid_str ../qsub_script.sh "../run_maker.sh $contig_args -f $fn"`
+    qout=`qsub -N "${fn}_${contig_range}" $hold_jid_str ../qsub_script.sh "../run_maker.sh $contig_args $config_args -f $fn"`
     echo $qout 1>&2
     rjid=`echo $qout | awk '{print $3}'`
     echo $rjid
