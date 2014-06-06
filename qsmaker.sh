@@ -1,5 +1,6 @@
 usage() { echo "Usage: $0 [-w -f <function> | -s <start contig size> -e <end contig size> -f <function>" 1>&2; exit 1; }
 
+qsub_script=$HOME/svn/Maker/qsub_script.sh
 cstart=
 cend=
 func=
@@ -39,15 +40,19 @@ submit_job() {
     count=0
     hold_jid_str=
     for j in "$@"; do
-        if [ $count ]; then
+        if [ $count -gt 0 ]; then
             hold_jid_str="${hold_jid_str} -hold_jid $j"
         fi
         ((count++))
     done
     # [ $hold_str ] || $hold_str=" -hold_jid 1 "
-    qout=`qsub -N "${fn}_${contig_range}" $hold_jid_str ../qsub_script.sh "../run_maker.sh $contig_args $config_args -f $fn"`
+    qscmd="qsub -N ${fn}_${contig_range} $hold_jid_str $qsub_script \"run_maker.sh $contig_args $config_args -f $fn\""
+    echo $qscmd 1>&2
+    #qout=`$qscmd`
+    qout=`qsub -N ${fn}_${contig_range} $hold_jid_str $qsub_script "run_maker.sh $contig_args $config_args -f $fn"`
     echo $qout 1>&2
-    rjid=`echo $qout | awk '{print $3}'`
+    #rjid=`echo $qout | awk '{print $3}'`
+    rjid=`echo $qout | perl -ne 'if (/job\s([0-9]+)\s/) { print $1; }'`
     echo $rjid
 }
 
@@ -67,7 +72,10 @@ submit_all() {
 if [[ "$func" = "all" ]]; then
     submit_all
 else
-    qsub -N "${func}_${contig_range}" ../qsub_script.sh "../run_maker.sh $contig_args -f $func"
+    qscmd="qsub -N ${func}_${contig_range} $qsub_script \"run_maker.sh $contig_args $config_args -f $func\""
+    echo $qscmd 1>&2
+    eval $qscmd
+    #qsub -N ${func}_${contig_range} $qsub_script "run_maker.sh $contig_args $config_args -f $func"
 fi
 
 

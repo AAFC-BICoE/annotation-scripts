@@ -20,11 +20,8 @@ genemark_es_dir=genemark_es
 genemark_sn_dir=genemark_sn
 
 maker2_dir=maker2
-gm_hmm=
-snap_hmm=$snap_dir/$genome.hmm
+gm_hmm="${genemark_es_dir}/mod/es.mod" # Note: this is a symlink - use readlink to resolve actual path before use.
 
-genome="${genome_raw%.*}"
-genome_fa=$genome_raw
 
 usage() { echo "Usage: $0 [-w -f <function> | -s <start contig size> -e <end contig size> -f <function>]" 1>&2; exit 1; }
 cstart=
@@ -54,11 +51,20 @@ done
 # Source config file if it exists.
 [ -e $config_file ] && source $config_file
 
-# [[ $genome_in && $RNA_in && $proteins_in && $augustus_species ]] || die error
+config_err() { echo "Error: Config file must define genome_in RNA_in and proteins_in at a minimum." 1>&2; exit 1; }
+echo "Genome in: $genome_in"
+echo "RNA in: $RNA_in"
+echo "Proteins in: $proteins_in"
+echo "Augustus species name: $augustus_species"
+[[ $genome_in && $RNA_in && $proteins_in && $augustus_species ]] || config_err
 
 genome_raw=`[ $genome_raw ] || basename $genome_in`
 RNA=`[ $RNA ] || basename $RNA_in`
 proteins=`[ $proteins ] || basename $proteins_in`
+
+genome="${genome_raw%.*}"
+genome_fa=$genome_raw
+snap_hmm=$snap_dir/$genome.hmm
 
 # Variables above this line can be redefined in the config.
 # Variables below cannot.
@@ -100,7 +106,7 @@ replace_vars()
     fname=$1
     key=$2
     value=$3
-    sed -i "s/^$key=[^\s\\]*\s/$key=$value #/" $fname
+    sed -i "s/^$key=[^\s#]*[\s#]/$key=$value #/" $fname
 }
 
 run_maker1()
@@ -226,31 +232,37 @@ run_maker2()
     cp $genome_fa $RNA $proteins $maker2_dir
     # cp $snap_dir/path/to/snaphmm snap.hmm
     # if [ type=eukaryote ]; then ...
-    cp $gm_hmm $maker2_dir/gm_es.mod # ln -s to be able to see target here?
-    cp $snap_hmm $maker2_dir/snap.hmm
+    gm_hmm_rl=`readlink $gm_hmm`
+    cp $gm_hmm_rl ${maker2_dir}/gm_es.mod # ln -s to be able to see target here?
+    cp $snap_hmm ${maker2_dir}/snap.hmm
     
-    cp $maker1_dir/$genome.all.gff $maker2_dir
-    cp $maker1_dir/*ctl $maker2_dir/
+    cp $maker1_dir/${genome}.all.gff ${maker2_dir}
+    cp $maker1_dir/*ctl ${maker2_dir}/
     cd $maker2_dir
     #maker -CTL
     
-    replace_vars $maker_opts genome $genome_fa
+    replace_vars $maker_opts genome ${genome_fa}
     replace_vars $maker_opts est $RNA
     replace_vars $maker_opts protein $proteins
     # Above three commands as in run_maker1
-    replace_vars $maker_opts genome_gff  $genome.all.gff
+    replace_vars $maker_opts genome_gff  ${genome}.all.gff
     
     replace_vars $maker_opts snaphmm snap.hmm
     replace_vars $maker_opts gmhmm gm_es.mod
-    replace_vars $maker_opts augustus_species $augustus_species
+    replace_vars $maker_opts augustus_species ${augustus_species}
     
     replace_vars $maker_opts est2genome 0
     replace_vars $maker_opts protein2genome 0
     
     replace_vars $maker_exe snap \\/isilon\\/biodiversity\\/pipelines\\/maker-2.10\\/snap-2013-16\\/snap
     replace_vars $maker_exe augustus \\/isilon\\/biodiversity\\/pipelines\\/maker-2.10\\/augustus.2.7\\/bin\\/augustus
-    # replace_vars 
-    maker_out=$genome.maker.output
+    replace_vars $maker_exe gmhmme3 \\/isilon\\/biodiversity\\/pipelines\\/maker-2.10\\/gene-mark-es-2.3e\\/gmes\\/gmhmme3
+    replace_vars $maker_exe probuild \\/isilon\\/biodiversity\\/pipelines\\/maker-2.10\\/gene-mark-es-2.3e\\/gmes\\/probuild
+    replace_vars $maker_exe exonerate \\/isilon\\/biodiversity\\/pipelines\\/maker-2.10\\/exonerate-2.2.0\\/bin\\/exonerate
+    
+    replace_vars $maker_bopts blast_type ncbi
+     
+    maker_out=${genome}.maker.output
     /isilon/biodiversity/pipelines/maker-2.10/maker-2.10/bin/maker
     /isilon/biodiversity/pipelines/maker-2.10/maker-2.10/bin/gff3_merge -d $maker_out/*_master_datastore_index.log
     /isilon/biodiversity/pipelines/maker-2.10/maker-2.10/bin/fasta_merge -d $maker_out/*_master_datastore_index.log
