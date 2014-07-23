@@ -184,14 +184,12 @@ train_snap()
     cd $snap_dir
     /isilon/biodiversity/pipelines/maker-2.10/snap-2013-16/fathom genome.ann genome.dna -gene-stats
     /isilon/biodiversity/pipelines/maker-2.10/snap-2013-16/fathom genome.ann genome.dna -validate
-    /isilon/biodiversity/pipelines/maker-2.10/snap-2013-16/fathom export.ann export.dna -export 1000 -plus
+    /isilon/biodiversity/pipelines/maker-2.10/snap-2013-16/fathom genome.ann genome.dna -export 1000 -plus
     mkdir params
 	cd params
 	/isilon/biodiversity/pipelines/maker-2.10/snap-2013-16/forge ../export.ann ../export.dna
 	cd ..
-	/isilon/biodiversity/pipelines/maker-2.10/snap-2013-16/hmm-assembler.pl $genome params > $genome.hmm
-	#Note: At the last step, you can replace my-genome with a name and my-genome.hmm
-	#with the file name.
+	/isilon/biodiversity/pipelines/maker-2.10/snap-2013-16/hmm-assembler.pl ../$genome_fa params > $genome.hmm
 }
 
 # Train genemark for eukaryotes
