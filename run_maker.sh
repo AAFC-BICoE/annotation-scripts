@@ -15,6 +15,7 @@ maker_exe=maker_exe.ctl
 maker_opts=maker_opts.ctl
 
 augustus1_dir=augustus1
+cegma_dir=cegma
 snap_dir=snap
 genemark_es_dir=genemark_es
 genemark_sn_dir=genemark_sn
@@ -27,7 +28,7 @@ usage() { echo "Usage: $0 [-w -f <function> | -s <start contig size> -e <end con
 cstart=
 cend=
 func=
-config_file=
+#config_file=
 while getopts "wc:s:e:f:" opt; do
     case "${opt}" in
         w)
@@ -173,11 +174,44 @@ train_augustus1()
 	/isilon/biodiversity/pipelines/maker-2.10/augustus.2.7/scripts/optimize_augustus.pl --species=$augustus_species genes.gb.train | tee optimize_log
 	/isilon/biodiversity/pipelines/maker-2.10/augustus.2.7/bin/etraining --species=$augustus_species genes.gb.train | tee etraining_final
 	/isilon/biodiversity/pipelines/maker-2.10/augustus.2.7/bin/augustus --species=$augustus_species genes.gb.test | tee accuracy_final
+    cd ..
 }
 
-# Without running CEGMA first here
-# Depends on maker1 output
+run_cegma()
+{
+    mkdir -p $cegma_dir
+    cd $cegma_dir
+    cegma -g ../$genome_fa -o $genome
+    # Creates output files $genome.cegma.* *=.dna, .errors, .fa, .gff, .id, .local.gff, .completeness_report 
+    # 2. Convert your CEGMA results into SNAP ZFF format by running:
+	/isilon/biodiversity/pipelines/maker-2.10/maker-2.10/bin/cegma2zff ${genome}.cegma.gff ../$genome_fa
+    cd ..
+}
+
+# Train SNAP using CEGMA output.
 train_snap()
+{
+    mkdir -p $snap_dir
+    cp $cegma_dir/genome.ann $cegma_dir/genome.dna $snap_dir/
+    cd $snap_dir
+    
+
+    # 3. Run all of the following:
+	/isilon/biodiversity/pipelines/maker-2.10/snap-2013-16/fathom genome.ann genome.dna -gene-stats
+	/isilon/biodiversity/pipelines/maker-2.10/snap-2013-16/fathom genome.ann genome.dna -validate
+	/isilon/biodiversity/pipelines/maker-2.10/snap-2013-16/fathom genome.ann genome.dna -categorize 1000
+	/isilon/biodiversity/pipelines/maker-2.10/snap-2013-16/fathom uni.ann uni.dna -export 1000 -plus
+	mkdir params
+	cd params
+	/isilon/biodiversity/pipelines/maker-2.10/snap-2013-16/forge ../export.ann ../export.dna
+	cd ..
+	/isilon/biodiversity/pipelines/maker-2.10/snap-2013-16/hmm-assembler.pl ../$genome params > $genome.hmm
+    cd ..
+}
+
+# Without running CEGMA first here. This function is deprecated.
+# Depends on maker1 output
+train_snap_no_cegma()
 {
     mkdir -p $snap_dir
     cp $maker1_dir/genome.dna $maker1_dir/genome.ann $snap_dir/
@@ -190,6 +224,7 @@ train_snap()
 	/isilon/biodiversity/pipelines/maker-2.10/snap-2013-16/forge ../export.ann ../export.dna
 	cd ..
 	/isilon/biodiversity/pipelines/maker-2.10/snap-2013-16/hmm-assembler.pl ../$genome_fa params > $genome.hmm
+	cd ..
 }
 
 # Train genemark for eukaryotes
@@ -211,6 +246,7 @@ train_genemark_es()
     elif [ -e $alt_gm_hmm ]; then
         gm_hmm=$alt_gm_hmm
     fi
+    cd ..
 }
 
 # Train genemark for prokaryotes
@@ -222,6 +258,7 @@ train_genemark_sn()
     name=gmsn
     gmsn.pl --combine --species $augustus_species -gm --name $name $genome_fa
     # When completed, the training file is <name>_hmm_combined.mod.
+    cd ..
 }
 
 run_maker2()
