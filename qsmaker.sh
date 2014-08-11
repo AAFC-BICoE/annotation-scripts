@@ -11,9 +11,11 @@ while getopts "awc:s:e:f:r:" opt; do
     case "${opt}" in
         a)
             do_submit_all=1
+            func="all"
             ;;
         r)
             do_submit_all_from=${OPTARG}
+            func="all_from"
             ;;
         w)
             contig_range="whole_genome"
