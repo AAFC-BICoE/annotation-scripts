@@ -2,7 +2,8 @@
 
 # Modifying just the top stanza below in a separate config file should be enough.
 #genome_in=/isilon/biodiversity/projects/PRI_Se/assembly/clc-sendo.fasta
-#RNA_in=/isilon/biodiversity/users/cullisj/bug3124/CFIA_contigs.fa
+#RNA_fasta_in=/isilon/biodiversity/users/cullisj/bug3124/CFIA_contigs.fa
+#RNA_gff_in=
 #proteins_in=/isilon/biodiversity/users/cullisj/bug3132/B_dendrobatidis/Batde5_best_proteins.fasta
 #augustus_species=synchytrium_endobioticum
 #cell_type=eukaryote # Bug: no difference if changed. Should change e.g. genemark binary used, among other things.
@@ -52,15 +53,17 @@ done
 # Source config file if it exists.
 [ -e $config_file ] && source $config_file
 
-config_err() { echo "Error: Config file must define genome_in RNA_in and proteins_in at a minimum." 1>&2; exit 1; }
+config_err() { echo "Error: Config file must define genome_in RNA_fasta_in/RNA_gff_in and proteins_in at a minimum." 1>&2; exit 1; }
 echo "Genome in: $genome_in"
-echo "RNA in: $RNA_in"
+echo "RNA fasta in: ${RNA_fasta_in}"
+echo "RNA gff in: ${RNA_gff_in}"
 echo "Proteins in: $proteins_in"
 echo "Augustus species name: $augustus_species"
-[[ $genome_in && $RNA_in && $proteins_in && $augustus_species ]] || config_err
+[[ $genome_in && ($RNA_fasta_in || $RNA_gff_in) && $proteins_in && $augustus_species ]] || config_err
 
 genome_raw=`[ $genome_raw ] || basename $genome_in`
-RNA=`[ $RNA ] || basename $RNA_in`
+RNA_fasta=` [ ! -z $RNA_fasta_in ] && basename $RNA_fasta_in`
+RNA_gff=` [ ! -z $RNA_gff_in ] && basename $RNA_gff_in`
 proteins=`[ $proteins ] || basename $proteins_in`
 
 genome="${genome_raw%.*}"
@@ -84,7 +87,8 @@ fi
 dir_setup()
 {
     ln -s $genome_in $genome_raw
-    ln -s $RNA_in $RNA
+    [ ! -z $RNA_fasta_in ] && ln -s $RNA_fasta_in $RNA_fasta
+    [ ! -z $RNA_gff_in ] && ln -s $RNA_gff_in $RNA_gff
     ln -s $proteins_in $proteins
 }
 
@@ -114,11 +118,14 @@ run_maker1()
 {
     # Run first pass of maker
     mkdir $maker1_dir
-    cp $genome_fa $RNA $proteins $maker1_dir/
+    cp $genome_fa $proteins $maker1_dir/
+    [ ! -z $RNA_fasta ] && cp $RNA_fasta $maker1_dir/
+    [ ! -z $RNA_gff ] && cp $RNA_gff $maker1_dir/
     cd $maker1_dir
     maker -CTL
     replace_vars $maker_opts genome $genome_fa
-    replace_vars $maker_opts est $RNA
+    [ ! -z $RNA_fasta ] && replace_vars $maker_opts est $RNA_fasta
+    [ ! -z $RNA_gff ] && replace_vars $maker_opts est_gff $RNA_gff
     replace_vars $maker_opts protein $proteins
     replace_vars $maker_opts est2genome 1
     #replace_vars $maker_opts protein2genome 1 (only if prokaryotic)
@@ -264,7 +271,9 @@ train_genemark_sn()
 run_maker2()
 {
     mkdir $maker2_dir
-    cp $genome_fa $RNA $proteins $maker2_dir
+    cp $genome_fa $proteins $maker2_dir
+    [ ! -z $RNA_fasta ] && cp $RNA_fasta $maker2_dir/
+    [ ! -z $RNA_gff ] && cp $RNA_gff $maker2_dir/
     # cp $snap_dir/path/to/snaphmm snap.hmm
     # if [ type=eukaryote ]; then ...
     gm_hmm_rl=`readlink $gm_hmm`
@@ -277,7 +286,9 @@ run_maker2()
     #maker -CTL
     
     replace_vars $maker_opts genome ${genome_fa}
-    replace_vars $maker_opts est $RNA
+    # replace_vars $maker_opts est $RNA
+    [ ! -z $RNA_fasta ] && replace_vars $maker_opts est $RNA_fasta
+    [ ! -z $RNA_gff ] && replace_vars $maker_opts est_gff $RNA_gff
     replace_vars $maker_opts protein $proteins
     # Above three commands as in run_maker1
     replace_vars $maker_opts genome_gff  ${genome}.all.gff
