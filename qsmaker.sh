@@ -60,7 +60,7 @@ submit_job() {
     qscmd="qsub -N ${fn}_${contig_range} $hold_jid_str $qsub_script \"run_maker.sh $contig_args $config_args -f $fn\""
     echo $qscmd 1>&2
     #qout=`$qscmd`
-    qout=`qsub -N ${fn}_${contig_range} $hold_jid_str $qsub_script "run_maker.sh $contig_args $config_args -f $fn"`
+    qout=`qsub -N ${fn}_${contig_range} -hold_jid 124902 $hold_jid_str $qsub_script "run_maker.sh $contig_args $config_args -f $fn"`
     echo $qout 1>&2
     #rjid=`echo $qout | awk '{print $3}'`
     rjid=`echo $qout | perl -ne 'if (/job\s([0-9]+)\s/) { print $1; }'`
