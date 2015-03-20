@@ -4,7 +4,8 @@
 # #$ -N qsub_script
 #$ -V
 #$ -M $EMAIL
-#$ -pe smp 1
+#$ -pe smp 25
+#$ -q all.q
 #$ -cwd
 export AUGUSTUS_CONFIG_PATH=$HOME/augustus/config
 export PATH=/usr/java/latest/bin/:$PATH

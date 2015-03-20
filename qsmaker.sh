@@ -32,6 +32,9 @@ while getopts "awc:s:e:f:r:" opt; do
         f)
             func=${OPTARG}
             ;;
+        q)
+	    qsub_script=${OPTARG}
+	    ;;
     esac
 done
 
