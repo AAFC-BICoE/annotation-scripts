@@ -4,7 +4,7 @@
 # #$ -N qsub_script
 #$ -V
 #$ -M $EMAIL
-#$ -pe smp 25
+#$ -pe smp 8
 #$ -q all.q
 #$ -cwd
 export AUGUSTUS_CONFIG_PATH=$HOME/augustus/config
